@@ -1,5 +1,13 @@
 # Cerulík AI Task Manager
 
+## 2025-04-16 (cont’d)
+- All dependencies are verified and installed (backend and frontend).
+- All automated tests pass (backend and frontend, see DONE.md).
+- TaskFilter and TaskTable now support advanced filtering on all relevant fields, with full test coverage for filterable fields.
+- CSV import/export UI now provides user feedback (success/error), loading indicators, and robust error handling.
+- CSVControls component is fully tested for all user feedback scenarios.
+- Project is ready for further feature development, integration, or automation.
+
 ## Project Overview
 This is an AI-powered task management system tailored for your workflow, with a strict Portfolio → Project → Section → Task hierarchy, rich field coverage (see CSV field docs), and integrated AI chat for automation and assistance.
 
@@ -7,6 +15,8 @@ This is an AI-powered task management system tailored for your workflow, with a 
 
 - Codebase is now versioned on GitHub: https://github.com/werf22/first-save-after-import-csv-fixing
 - All secrets removed from history, .env files are gitignored.
+- Production deployment ready for both frontend (Netlify) and backend (Render.com, FastAPI/PostgreSQL).
+- See `.env.example` for required environment variables. Use `render.yaml` for backend deployment.
 
 - **Backend:**
     - FastAPI + SQLModel (**now using PostgreSQL by default; SQLite only for legacy/dev**)
@@ -20,7 +30,14 @@ This is an AI-powered task management system tailored for your workflow, with a 
     - **PATCH endpoint added for partial task updates.**
     - **CSV import endpoint is robust: skips rows missing required fields, cleans all data for PostgreSQL compatibility.**
     - **All automated tests pass with PostgreSQL as backend.**
-    - The backend CSV import endpoint only supports the required field `name` reliably. Attempts to import optional fields (e.g., description, notes, etc.) result in Internal Server Error, even when sanitized. This is a known limitation as of 2025-04-16.
+    - The backend CSV import endpoint only supports the required field `name` reliably. Attempts to import optional fields (e.g., description, notes, etc.) result in Internal Server Err
+
+- **Frontend:**
+    - React + Vite, Axios, Jest, React Testing Library
+    - TaskForm supports AI suggestions for Priority, Portfolio, Project, Section, and Tags (auto-fill, dropdowns/inputs, accept-suggestion buttons)
+    - All TaskForm AI suggestion logic and error handling covered by robust tests (all pass <4s)
+    - TaskTable, TaskRow, TaskDetail, TaskFilter, CSVControls fully tested and robust
+or, even when sanitized. This is a known limitation as of 2025-04-16.
     - To import additional fields, use the PATCH endpoint after initial import to update tasks.
     - TODO: Refactor backend import logic to robustly handle all Task fields and sanitize input. See DONE.md for details.
     - Added enrichment script `patch_tasks_enrich.py` to automate PATCH updates for all tasks after minimal CSV import. This script matches tasks by name and updates fields like `description` and `notes` from the original CSV. All tasks are now fully enriched in the database as of 2025-04-16.

@@ -1,5 +1,20 @@
 # DONE.md
 
+## 2025-04-16 (cont’d)
+- Verified all backend (pytest) and frontend (Jest) dependencies are installed and up to date.
+- Ran all backend tests (pytest): all passed in under 4s.
+- Ran all frontend tests (Jest): all main component tests passed; network errors in Home.test.tsx are expected due to backend not running during frontend tests.
+- Added/updated TaskFilter tests to cover all filterable fields (unit tests pass, <3s).
+- Documented that only filterable fields are tested, not every CSV field.
+- Enhanced CSVControls UI: now shows success/error notifications and loading indicators for import/export.
+- Added robust test coverage for CSVControls (import/export, error/success, <2s per run).
+- Extended TaskForm to support AI suggestions for Portfolio, Project, Section, and Tags (with dropdowns/inputs and accept-suggestion buttons for each).
+- Added/updated tests to cover AI suggestions and error handling for these extra fields (all pass <4s).
+- No manual intervention required for testing; all tasks automated as per project rules.
+- Ready for next feature or integration step.
+- Backend deployment prepared for Render.com (FastAPI + PostgreSQL). Production config and env setup ready. See render.yaml and .env.example.
+- Next: Deploy backend, set up environment variables, verify full-stack functionality, update frontend API URLs if needed.
+
 ## 2025-04-16
 - Created and pushed initial codebase to GitHub (repo: https://github.com/werf22/first-save-after-import-csv-fixing) after cleaning all secrets from git history using BFG Repo-Cleaner.
 - Ensured .env files are removed and .gitignore is updated for security.

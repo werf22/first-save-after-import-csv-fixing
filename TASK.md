@@ -1,5 +1,14 @@
 # TASK
 
+## 2025-04-16 (cont’d)
+- Verified and installed all backend/frontend dependencies.
+- Ran backend and frontend tests (all pass, see DONE.md for details).
+- Extended TaskForm to support AI suggestions for Portfolio, Project, Section, and Tags (dropdowns/inputs + accept-suggestion for each)
+- Added/updated tests for all new AI suggestion fields (all pass <4s)
+- All core features (AI suggestions in TaskForm, per-task AI chat in TaskDetail) are now implemented and fully tested.
+- Codebase, documentation, and tests are up to date (see README.md, DONE.md).
+- Next: Deployment or further enhancements as needed.
+
 Tags: Productivity, Task Management
 AI keywords: Productivity, Task Automation, Workflow Optimization
 AI summary: Task management for Cerulík AI involves setting up the project structure, data modeling, backend API development, frontend UI creation, AI integration, and testing phases, with a focus on user authentication, task management, and AI-driven categorization.

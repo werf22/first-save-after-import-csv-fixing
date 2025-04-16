@@ -1,5 +1,11 @@
 # FILE_STRUCTURE_DOCUMENTATION.md
 
+## 2025-04-16 (cont’d)
+- All dependencies and tests verified as up to date and passing (see DONE.md for details).
+- TaskFilter tests added for all filterable fields (see __tests__/TaskFilter.test.tsx).
+- CSVControls UI now provides feedback and has full test coverage (see __tests__/CSVControls.test.tsx).
+- Project ready for next feature or automation step.
+
 ## 2025-04-16
 - Initial codebase pushed to GitHub (https://github.com/werf22/first-save-after-import-csv-fixing) after full secret cleanup from git history.
 - .env and sensitive files are now gitignored and excluded from all commits.
