@@ -22,7 +22,14 @@ Parent item: KÓD Potrebné (https://www.notion.so/K-D-Potrebn-1d675c7df218801db
 - [x] Backend: **PATCH endpoint for tasks implemented.** (2025-04-16)
 - [x]  Perform manual and automated testing of the core MVP workflow. **Filtering/sorting on exposed fields now robust and fully tested.** (2025-04-16)
 - [x]  Fixed Task API response to include all foreign key fields and pass all backend tests (2025-04-16)
-- [ ]  Setup Git Repository (e.g., on GitHub/GitLab).
+- [x]  Setup Git Repository (GitHub, repo: https://github.com/werf22/first-save-after-import-csv-fixing) (2025-04-16)
+- [x] Migrate backend from SQLite to PostgreSQL (2025-04-16)
+- [x] Patch CSV import and backend to robustly clean data and skip invalid rows (2025-04-16)
+- [x] All backend tests pass with PostgreSQL (2025-04-16)
+- [x] Fix TaskTable frontend test failures due to ambiguous filter aria-labels and mock API mismatches (2025-04-17)
+- [x] Real CSV data imported using minimal CSV with only `name` field (2025-04-16)
+- [x] All tasks enriched with description and notes using PATCH and `patch_tasks_enrich.py` (2025-04-16)
+- [ ] Backend CSV import endpoint does not support optional fields (description, notes, etc.)—see README.md for workaround and TODO
 - [ ]  Choose and setup Frontend framework (React/Vue). Create initial project structure.
 - [ ]  Choose and setup Backend framework (Python - Flask/Django). Create initial project structure.
 - [ ]  Setup PostgreSQL database (local instance for development).
@@ -38,8 +45,18 @@ Parent item: KÓD Potrebné (https://www.notion.so/K-D-Potrebn-1d675c7df218801db
 - All backend CRUD, filtering, sorting, and CSV endpoints are robust and fully tested.
 - All date serialization and filtering issues resolved (see DONE.md).
 - All backend and frontend tests pass.
-- Awaiting real CSV and lookup data for full import.
-- Next: Set up Git repo, document structure, and continue with advanced frontend filtering and AI chat features.
+- Real CSV and lookup data import is ready and scripts are in place.
+- GitHub repository is set up, history cleaned of secrets, and codebase is public: https://github.com/werf22/first-save-after-import-csv-fixing
+- Documentation, file structure, and security are up to date.
+
+### How to Continue
+- Next step: Continue frontend work (UI controls for filtering/sorting, TaskTable refinement, AI chat in Task Detail)
+- Backend: Import real CSV/lookup data, optimize queries, add endpoints for AI chat and automation.
+- Always commit and push to GitHub for version tracking.
+- Update documentation after each step in TASK.md, README.md, DONE.md, and FILE_STRUCTURE_DOCUMENTATION.md
+- All secrets must remain out of git history. Use .env for local secrets only.
+- All requirements and dependencies must be installed as needed.
+- Follow project conventions and structure as described in documentation.
 
 # ===
 # SESSION LOG: 2025-04-16

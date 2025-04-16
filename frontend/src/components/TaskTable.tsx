@@ -4,6 +4,33 @@ import { TaskRow } from "./TaskRow";
 import { TaskFilter } from "./TaskFilter";
 import { TaskDetail } from "./TaskDetail";
 
+// --- DYNAMIC FIELD CONFIGURATION ---
+// CSV fields from TASK_TABLE_FIELDS_EXAMPLE_STRUCTURE.csv
+const CSV_FIELDS = [
+  "Task ID","Name","Description","Notes","Task Comments","Portfolio","Project","Sections","Parent Task","Parent Task ID","Subtasks (for user)","Subtasks (for AI)","Subtasks (in System)","Subtasks ID (in System)","AI Brainstorm Ideas on How It Can Help Me:","Dependents","Dependents ID","Outgoing Dependents","Outgoing Dependents ID","Tags","Priority","Due Date","Start Date","Deadline Type","Recurrence / Frequency","Created At","Completed At","Last Modified At","Task Goal","Input Data & Context","Desired Output Format","AI Action / Process (Free Text)","AI Action / Process (Dropdown)","AI Workflow Status","Allow Autonomous Execution","Number of Variations (If Applicable)","Desired Style / Tone","Specific Constraints / Instructions","AI Behavior on Uncertainty","AI Creativity Level","AI Processing Priority","AI Agent Status Log","AI Output / Result Link","Action Required From User","Related Portfolios","Related Projects","Related Sections","Related Tasks","Related Tasks ID","Related Entities","Target Audience","Task Purpose (Why)","Type","Task Type","Estimated User Time","Cognitive Load (For User)","Energy Level Required (For User)","Required Tools / Software","Required Hardware","Required Skills","Estimated Cost / Budget","Expected Impact / Success Metric","Location","Execution Location","Required Device(s)","Internet Requirement","Focus Requirement","Optimal Time of Day","Assignee","Collaborators","Related Entity","Waiting For","Financial Return (Value & Speed)","AI Output Rating","Feedback for AI","Suggested Initial Steps / Subtasks","Relatated Areas for AI to Consider","Potential Dependencies / Related Tasks"
+];
+
+// Map CSV fields to API/database fields (snake_case, lowercase)
+const FIELD_MAP = CSV_FIELDS.map(f => f
+  .replace(/\s*\([^)]*\)/g, "") // remove parentheticals
+  .replace(/[^a-zA-Z0-9]+/g, '_')
+  .replace(/^_+|_+$/g, '')
+  .replace(/_+/g, '_')
+  .toLowerCase()
+);
+
+// Utility: ensure unique keys for React
+function getUniqueFieldKeys(fields: string[]): string[] {
+  const seen = new Map<string, number>();
+  return fields.map(f => {
+    const count = seen.get(f) || 0;
+    seen.set(f, count + 1);
+    return count === 0 ? f : `${f}_${count}`;
+  });
+}
+
+const UNIQUE_FIELD_KEYS = getUniqueFieldKeys(FIELD_MAP);
+
 export interface Task {
   id: number;
   name: string;
@@ -20,9 +47,10 @@ export interface Task {
   completed_at?: string;
   last_modified_at?: string;
   // Add other fields as needed
+  [key: string]: any;
 }
 
-type SortKey = "id" | "name" | "description" | "due_date" | "priority" | "portfolio" | "project" | "sections" | "tags" | "assignee" | "ai_workflow_status";
+type SortKey = typeof UNIQUE_FIELD_KEYS[number];
 
 type SortDir = "asc" | "desc";
 
@@ -31,8 +59,44 @@ interface TaskTableProps {
   TaskFilterProps?: any;
 }
 
+const DROPDOWN_ID_FIELDS: Record<string, string> = {
+  priority: 'priority_id',
+  portfolio: 'portfolio_id',
+  project: 'project_id',
+  sections: 'section_id',
+};
+
+const applyFilters = (tasks: any[], filters: Record<string, any>) => {
+  return tasks.filter(task => {
+    for (const key in filters) {
+      const value = filters[key];
+      if (!value) continue;
+      if (DROPDOWN_ID_FIELDS[key]) {
+        // Compare id field as string for dropdowns
+        if (String(task[DROPDOWN_ID_FIELDS[key]]) !== String(value)) return false;
+      } else if (key.includes('date')) {
+        if (!task[key] || !task[key].startsWith(value)) return false;
+      } else {
+        if (!task[key] || !String(task[key]).toLowerCase().includes(String(value).toLowerCase())) return false;
+      }
+    }
+    return true;
+  });
+};
+
+function sortTasks(tasks: Task[], sortKey: string, sortDir: 'asc' | 'desc'): Task[] {
+  return [...tasks].sort((a, b) => {
+    const aVal = a[sortKey] ?? '';
+    const bVal = b[sortKey] ?? '';
+    if (aVal < bVal) return sortDir === 'asc' ? -1 : 1;
+    if (aVal > bVal) return sortDir === 'asc' ? 1 : -1;
+    return 0;
+  });
+}
+
 export const TaskTable: React.FC<TaskTableProps> = ({ auth, TaskFilterProps }) => {
-  const [tasks, setTasks] = useState<Task[]>([]);
+  const [allTasks, setAllTasks] = useState<Task[]>([]); // Raw, unfiltered data
+  const [tasks, setTasks] = useState<Task[]>([]); // Filtered/visible tasks
   const [filters, setFilters] = useState({
     priority: "",
     portfolio: "",
@@ -46,32 +110,30 @@ export const TaskTable: React.FC<TaskTableProps> = ({ auth, TaskFilterProps }) =
     completed_at_before: "",
     search: "",
   });
-  const [sortKey, setSortKey] = useState<SortKey>("id");
-  const [sortDir, setSortDir] = useState<SortDir>("asc");
   const [selectedTaskId, setSelectedTaskId] = useState<number | null>(null);
+  const [sortKey, setSortKey] = useState<SortKey>(UNIQUE_FIELD_KEYS[0]);
+  const [sortDir, setSortDir] = useState<SortDir>("asc");
   const [refreshList, setRefreshList] = useState(false);
 
-  function fetchTasks() {
-    // Filter out empty string or null values from filters
-    const params: Record<string, any> = {};
-    Object.entries(filters).forEach(([key, value]) => {
-      if (value !== "" && value !== null && value !== undefined) {
-        params[key] = value;
-      }
-    });
-    params.sort_key = sortKey;
-    params.sort_dir = sortDir;
-    axios.get("/api/tasks", {
-      params,
+  async function fetchTasks() {
+    await axios.get("/api/tasks", {
+      params: {},
       headers: { Authorization: 'Basic ' + btoa(`${auth.username}:${auth.password}`) }
     }).then((res) => {
-      setTasks(res.data);
+      setAllTasks(res.data);
+      setTasks(sortTasks(applyFilters(res.data, filters), sortKey, sortDir));
     });
   }
 
   useEffect(() => {
     fetchTasks();
-  }, [filters, sortKey, sortDir]);
+  }, [refreshList]);
+
+  useEffect(() => {
+    const filtered = applyFilters(allTasks, filters);
+    setTasks(sortTasks(filtered, sortKey, sortDir));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filters, allTasks, sortKey, sortDir]);
 
   useEffect(() => {
     fetchTasks();
@@ -94,17 +156,17 @@ export const TaskTable: React.FC<TaskTableProps> = ({ auth, TaskFilterProps }) =
     setFilters(newFilters);
   };
 
-  const handleSort = (key: SortKey) => {
-    if (key === sortKey) {
-      setSortDir(sortDir === "asc" ? "desc" : "asc");
+  const handleSort = (field: string) => {
+    if (sortKey === field) {
+      setSortDir(sortDir === 'asc' ? 'desc' : 'asc');
     } else {
-      setSortKey(key);
-      setSortDir("asc");
+      setSortKey(field);
+      setSortDir('asc');
     }
   };
 
-  const sortIndicator = (key: SortKey) =>
-    sortKey === key ? (sortDir === "asc" ? " ▲" : " ▼") : "";
+  const sortIndicator = (field: SortKey) =>
+    sortKey === field ? (sortDir === "asc" ? " ▲" : " ▼") : "";
 
   return (
     <div>
@@ -119,50 +181,44 @@ export const TaskTable: React.FC<TaskTableProps> = ({ auth, TaskFilterProps }) =
         <div>
           <h2>Task List</h2>
           <TaskFilter filters={filters} onFiltersChange={handleFiltersChange} debounceMs={0} />
-          <table aria-label="Task List" role="table">
-            <thead>
-              <tr>
-                <th scope="col" tabIndex={0} role="columnheader" onKeyDown={e => (e.key==="Enter"||e.key===" ")&&handleSort("id") } onClick={() => handleSort("id")}>ID{sortIndicator("id")}</th>
-                <th scope="col" tabIndex={0} role="columnheader" onKeyDown={e => (e.key==="Enter"||e.key===" ")&&handleSort("name") } onClick={() => handleSort("name")}>Name{sortIndicator("name")}</th>
-                <th scope="col" tabIndex={0} role="columnheader" onKeyDown={e => (e.key==="Enter"||e.key===" ")&&handleSort("description") } onClick={() => handleSort("description")}>Description</th>
-                <th scope="col" tabIndex={0} role="columnheader" onKeyDown={e => (e.key==="Enter"||e.key===" ")&&handleSort("due_date") } onClick={() => handleSort("due_date")}>Due Date{sortIndicator("due_date")}</th>
-                <th scope="col" tabIndex={0} role="columnheader" onKeyDown={e => (e.key==="Enter"||e.key===" ")&&handleSort("priority") } onClick={() => handleSort("priority")}>Priority{sortIndicator("priority")}</th>
-                <th scope="col" tabIndex={0} role="columnheader" onKeyDown={e => (e.key==="Enter"||e.key===" ")&&handleSort("portfolio") } onClick={() => handleSort("portfolio")}>Portfolio{sortIndicator("portfolio")}</th>
-                <th scope="col" tabIndex={0} role="columnheader" onKeyDown={e => (e.key==="Enter"||e.key===" ")&&handleSort("project") } onClick={() => handleSort("project")}>Project{sortIndicator("project")}</th>
-                <th scope="col" tabIndex={0} role="columnheader" onKeyDown={e => (e.key==="Enter"||e.key===" ")&&handleSort("sections") } onClick={() => handleSort("sections")}>Sections{sortIndicator("sections")}</th>
-                <th scope="col" tabIndex={0} role="columnheader" onKeyDown={e => (e.key==="Enter"||e.key===" ")&&handleSort("tags") } onClick={() => handleSort("tags")}>Tags{sortIndicator("tags")}</th>
-                <th scope="col" tabIndex={0} role="columnheader" onKeyDown={e => (e.key==="Enter"||e.key===" ")&&handleSort("assignee") } onClick={() => handleSort("assignee")}>Assignee{sortIndicator("assignee")}</th>
-                <th scope="col" tabIndex={0} role="columnheader" onKeyDown={e => (e.key==="Enter"||e.key===" ")&&handleSort("ai_workflow_status") } onClick={() => handleSort("ai_workflow_status")}>Status{sortIndicator("ai_workflow_status")}</th>
-                <th scope="col" role="columnheader">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {tasks.length === 0 ? (
-                <tr><td colSpan={12} style={{ textAlign: 'center' }}>No tasks found</td></tr>
-              ) : (
-                tasks.map((task) => (
-                  <tr key={task.id}>
-                    <td>{task.id}</td>
-                    <td>
-                      <button style={{ background: "none", border: "none", color: "#1976d2", cursor: "pointer" }} onClick={() => setSelectedTaskId(task.id)}>
-                        {task.name}
-                      </button>
-                    </td>
-                    <td>{task.description}</td>
-                    <td>{task.due_date}</td>
-                    <td>{task.priority}</td>
-                    <td>{task.portfolio}</td>
-                    <td>{task.project}</td>
-                    <td>{task.sections}</td>
-                    <td>{task.tags}</td>
-                    <td>{task.assignee}</td>
-                    <td>{task.ai_workflow_status}</td>
-                    <td>{/* Optionally add edit/delete here */}</td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
+          <div style={{ overflowX: "auto" }}>
+            <table aria-label="Task List" role="table">
+              <thead>
+                <tr>
+                  {UNIQUE_FIELD_KEYS.map((field, i) => (
+                    <th
+                      key={field}
+                      role="columnheader"
+                      aria-label={CSV_FIELDS[i]}
+                      style={{ cursor: 'pointer', userSelect: 'none' }}
+                      onClick={() => handleSort(field)}
+                      aria-sort={sortKey === field ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'}
+                    >
+                      {CSV_FIELDS[i]}
+                      {sortKey === field ? (sortDir === 'asc' ? ' ▲' : ' ▼') : ''}
+                    </th>
+                  ))}
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {tasks.length === 0 ? (
+                  <tr><td colSpan={CSV_FIELDS.length + 1} style={{ textAlign: 'center' }}>No tasks found</td></tr>
+                ) : (
+                  tasks.map((task, i) => (
+                    <tr key={task.id || i}>
+                      {UNIQUE_FIELD_KEYS.map(field => (
+                        <td key={field}>{task[field] !== undefined ? String(task[field]) : ''}</td>
+                      ))}
+                      <td>
+                        <button onClick={() => setSelectedTaskId(task.id)}>Details</button>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
     </div>

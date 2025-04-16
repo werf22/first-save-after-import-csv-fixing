@@ -122,6 +122,13 @@ class Task(SQLModel, table=True):
     related_areas_for_ai_to_consider: Optional[str] = None
     potential_dependencies_related_tasks: Optional[str] = None
 
+class TaskChatMessage(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    task_id: int = Field(foreign_key="task.id")
+    sender: str  # 'user' or 'ai'
+    message: str
+    timestamp: datetime = Field(default_factory=datetime.utcnow)
+
 class TaskRead(BaseModel):
     id: int
     name: str

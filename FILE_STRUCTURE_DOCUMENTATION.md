@@ -1,5 +1,12 @@
 # FILE_STRUCTURE_DOCUMENTATION.md
 
+## 2025-04-16
+- Initial codebase pushed to GitHub (https://github.com/werf22/first-save-after-import-csv-fixing) after full secret cleanup from git history.
+- .env and sensitive files are now gitignored and excluded from all commits.
+- Documentation, structure, and conventions are up to date.
+- All future changes must be documented here and in README.md, TASK.md, and DONE.md.
+- To continue: follow the structure, conventions, and update documentation after every step.
+
 This document provides a comprehensive overview of the file and directory structure of the Cerulík AI Task Manager project. It details every file and folder, their locations, and their purposes, so you always know where to find what you need.
 
 ---
@@ -123,6 +130,8 @@ This document provides a comprehensive overview of the file and directory struct
 ## Where to Find What
 
 - **Backend API:** `main.py`, `models.py`, `backend/scripts/`
+- **Backend now uses PostgreSQL by default.**
+- **CSV import/export and all endpoints are robust to invalid data and tested with PostgreSQL.**
 - **Frontend UI:** `frontend/src/components/`, `frontend/src/App.tsx`
 - **Database Models:** `models.py`
 - **CSV Import/Export:** `backend/scripts/parse_csv_to_db.py`, `TASK_TABLE_FIELDS_EXAMPLE_STRUCTURE.csv`

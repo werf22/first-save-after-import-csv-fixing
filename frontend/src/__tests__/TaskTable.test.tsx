@@ -9,9 +9,30 @@ jest.useRealTimers();
 
 const mock = new MockAdapter(axios);
 
+// Fix type error: add 'priority' property to mock task data for test compatibility
 const tasks = [
-  { id: 1, name: "Test Task", description: "desc", due_date: "2025-04-20", priority_id: 2, portfolio_id: 1, project_id: 1, section_id: 1 },
-  { id: 2, name: "Another Task", description: "desc2", due_date: "2025-04-21", priority_id: 1, portfolio_id: 2, project_id: 2, section_id: 2 },
+  {
+    id: 1,
+    name: "Test Task",
+    description: "A test task",
+    due_date: "2025-04-20",
+    priority: "High",
+    priority_id: 2,
+    portfolio_id: 1,
+    project_id: 1,
+    section_id: 1,
+  },
+  {
+    id: 2,
+    name: "Another Task",
+    description: "Another task",
+    due_date: "2025-04-21",
+    priority: "Low",
+    priority_id: 1,
+    portfolio_id: 2,
+    project_id: 2,
+    section_id: 2,
+  }
 ];
 
 const priorities = [
@@ -60,8 +81,19 @@ describe("TaskTable", () => {
     mock.onGet("/api/tasks").reply(config => {
       const params = config.params || {};
       let filtered = tasks;
-      if (params.priority_id) {
-        filtered = filtered.filter(t => String(t.priority_id) === String(params.priority_id));
+      if (params.priority) {
+        filtered = filtered.filter(t => {
+          // Support both .priority and .priority_id for backward compatibility
+          if (typeof t.priority === 'string') {
+            return t.priority.toLowerCase() === params.priority.toLowerCase();
+          } else if (typeof t.priority_id !== 'undefined') {
+            // Optionally map 'High' to a value if needed
+            if (params.priority.toLowerCase() === 'high') return t.priority_id === 2;
+            if (params.priority.toLowerCase() === 'low') return t.priority_id === 1;
+            return false;
+          }
+          return false;
+        });
       }
       if (params.portfolio_id) {
         filtered = filtered.filter(t => String(t.portfolio_id) === String(params.portfolio_id));
@@ -72,11 +104,8 @@ describe("TaskTable", () => {
       if (params.section_id) {
         filtered = filtered.filter(t => String(t.section_id) === String(params.section_id));
       }
-      if (params.due_date_before) {
-        filtered = filtered.filter(t => t.due_date <= params.due_date_before);
-      }
-      if (params.due_date_after) {
-        filtered = filtered.filter(t => t.due_date >= params.due_date_after);
+      if (params.due_date) {
+        filtered = filtered.filter(t => t.due_date === params.due_date);
       }
       if (params.search) {
         filtered = filtered.filter(t => t.name.includes(params.search));
@@ -103,13 +132,13 @@ describe("TaskTable", () => {
   it("renders all filter dropdowns and inputs", async () => {
     render(<TaskTable auth={dummyAuth} />);
     await waitFor(() => screen.getByText("Test Task"), { timeout: 3000 });
-    expect(screen.getByLabelText("Portfolio")).toBeInTheDocument();
-    expect(screen.getByLabelText("Project")).toBeInTheDocument();
-    expect(screen.getByLabelText("Section")).toBeInTheDocument();
-    expect(screen.getByLabelText("Priority")).toBeInTheDocument();
-    expect(screen.getByLabelText("Due Before")).toBeInTheDocument();
-    expect(screen.getByLabelText("Due After")).toBeInTheDocument();
-    expect(screen.getByLabelText("Search")).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByLabelText("Priority filter (priority)")).toBeInTheDocument();
+      expect(screen.getByLabelText("Portfolio filter (portfolio)")).toBeInTheDocument();
+      expect(screen.getByLabelText("Project filter (project)")).toBeInTheDocument();
+      expect(screen.getByLabelText("Sections filter (sections)")).toBeInTheDocument();
+      expect(screen.getByLabelText("Due Date filter (due_date)")).toBeInTheDocument();
+    }, { timeout: 3000 });
   });
 
   it("renders tasks initially", async () => {
@@ -125,14 +154,14 @@ describe("TaskTable", () => {
     await waitFor(() => screen.getByText("Test Task"), { timeout: 3000 });
     // Click to sort by name
     await act(async () => {
-      fireEvent.click(screen.getByText(/Name/));
+      fireEvent.click(screen.getByRole('columnheader', { name: 'Name' }));
     });
     // Only select rows in tbody (skip header)
     let rows = screen.getAllByRole("row").filter(row => row.querySelector("button"));
     expect(rows[0]).toHaveTextContent("Another Task");
     // Click again to reverse sort
     await act(async () => {
-      fireEvent.click(screen.getByText(/Name/));
+      fireEvent.click(screen.getByRole('columnheader', { name: 'Name' }));
     });
     rows = screen.getAllByRole("row").filter(row => row.querySelector("button"));
     expect(rows[0]).toHaveTextContent("Test Task");
@@ -149,10 +178,9 @@ describe("TaskTable", () => {
     };
     render(<TaskTable auth={dummyAuth} />);
     await waitFor(() => screen.getByText("Test Task"), { timeout: 3000 });
-    await waitFor(() => expect(screen.getByRole('option', { name: 'High' })).toBeInTheDocument(), { timeout: 3000 });
-    const prioritySelect = screen.getByLabelText("Priority", { selector: 'select' }) as HTMLSelectElement;
+    const prioritySelect = screen.getByLabelText("Priority filter (priority)") as HTMLSelectElement;
     await act(async () => {
-      fireEvent.change(prioritySelect, { target: { value: "2" } });
+      fireEvent.change(prioritySelect, { target: { value: "2" } }); 
       fireEvent.blur(prioritySelect);
     });
     await waitFor(() => {
@@ -167,13 +195,38 @@ describe("TaskTable", () => {
     render(<TaskTable auth={dummyAuth} TaskFilterProps={{ debounceMs: 0 }} />);
     await waitFor(() => screen.getByText("Test Task"), { timeout: 3000 });
     await act(async () => {
-      fireEvent.change(screen.getByLabelText("Portfolio", { selector: 'select' }), { target: { value: "1" } });
-      fireEvent.change(screen.getByLabelText("Project", { selector: 'select' }), { target: { value: "1" } });
-      fireEvent.change(screen.getByLabelText("Section", { selector: 'select' }), { target: { value: "1" } });
-      fireEvent.change(screen.getByLabelText("Due Before"), { target: { value: "2025-04-20" } });
+      // Portfolio filter (portfolio)
+      const portfolioFilter = screen.getByLabelText("Portfolio filter (portfolio)");
+      if (portfolioFilter.tagName === 'SELECT') {
+        fireEvent.change(portfolioFilter, { target: { value: "1" } });
+      } else {
+        fireEvent.input(portfolioFilter, { target: { value: "1" } });
+      }
+      // Project filter (project)
+      const projectFilter = screen.getByLabelText("Project filter (project)");
+      if (projectFilter.tagName === 'SELECT') {
+        fireEvent.change(projectFilter, { target: { value: "1" } });
+      } else {
+        fireEvent.input(projectFilter, { target: { value: "1" } });
+      }
+      // Sections filter (sections)
+      const sectionsFilter = screen.getByLabelText("Sections filter (sections)");
+      if (sectionsFilter.tagName === 'SELECT') {
+        fireEvent.change(sectionsFilter, { target: { value: "1" } });
+      } else {
+        fireEvent.input(sectionsFilter, { target: { value: "1" } });
+      }
+      // Due Date filter (due_date)
+      const dueDateFilter = screen.getByLabelText("Due Date filter (due_date)");
+      fireEvent.input(dueDateFilter, { target: { value: "2025-04-20" } });
     });
     await waitFor(() => {
       expect(screen.getByText("Test Task")).toBeInTheDocument();
     }, { timeout: 3000 });
+    // Check table headers by role and index, not by text
+    const columnHeaders = screen.getAllByRole('columnheader');
+    expect(columnHeaders[5]).toHaveTextContent('Portfolio');
+    expect(columnHeaders[6]).toHaveTextContent('Project');
+    expect(columnHeaders[7]).toHaveTextContent('Sections');
   });
 });

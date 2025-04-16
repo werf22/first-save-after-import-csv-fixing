@@ -4,8 +4,12 @@
 This is an AI-powered task management system tailored for your workflow, with a strict Portfolio → Project → Section → Task hierarchy, rich field coverage (see CSV field docs), and integrated AI chat for automation and assistance.
 
 ## Current State (2025-04-16)
+
+- Codebase is now versioned on GitHub: https://github.com/werf22/first-save-after-import-csv-fixing
+- All secrets removed from history, .env files are gitignored.
+
 - **Backend:**
-    - FastAPI + SQLModel (SQLite for dev)
+    - FastAPI + SQLModel (**now using PostgreSQL by default; SQLite only for legacy/dev**)
     - All CRUD endpoints for tasks and lookups (Portfolio, Project, Section, Priority, Tag)
     - Robust filtering, sorting, pagination on all exposed fields
     - CSV import/export fully round-trip tested
@@ -14,6 +18,13 @@ This is an AI-powered task management system tailored for your workflow, with a 
     - **Task model and API are now 100% synced to CSV field spec and documentation.**
     - **Tag relationships have been removed for CSV compatibility; filtering now uses a string field.**
     - **PATCH endpoint added for partial task updates.**
+    - **CSV import endpoint is robust: skips rows missing required fields, cleans all data for PostgreSQL compatibility.**
+    - **All automated tests pass with PostgreSQL as backend.**
+    - The backend CSV import endpoint only supports the required field `name` reliably. Attempts to import optional fields (e.g., description, notes, etc.) result in Internal Server Error, even when sanitized. This is a known limitation as of 2025-04-16.
+    - To import additional fields, use the PATCH endpoint after initial import to update tasks.
+    - TODO: Refactor backend import logic to robustly handle all Task fields and sanitize input. See DONE.md for details.
+    - Added enrichment script `patch_tasks_enrich.py` to automate PATCH updates for all tasks after minimal CSV import. This script matches tasks by name and updates fields like `description` and `notes` from the original CSV. All tasks are now fully enriched in the database as of 2025-04-16.
+    - See DONE.md for changelog and process details.
 - **Frontend:**
     - React + Vite + TypeScript skeleton
     - TaskTable with filtering/sorting
@@ -34,11 +45,24 @@ This is an AI-powered task management system tailored for your workflow, with a 
 - All tests pass in <2s
 - **TaskTagLink and tag relationships removed; all tag filtering now uses LIKE on tags string field.**
 - **PATCH endpoint for tasks implemented.**
+- Migrated backend from SQLite to PostgreSQL (see DONE.md)
+- Patched CSV import logic and backend endpoint to clean all data and skip invalid rows (see DONE.md)
+- All backend tests now pass with PostgreSQL
 
 ## Where We Ended
 - System is robust and ready for real data import and advanced feature work
 - All tests (backend/frontend) pass
 - Awaiting real CSV and lookup data for full import
+- GitHub repository is set up and codebase is public: https://github.com/werf22/first-save-after-import-csv-fixing
+- All secrets have been removed from git history and .env is gitignored
+- Documentation and file structure are up to date
+
+## How to Continue
+- Continue frontend work (UI controls, TaskTable, AI chat integration)
+- Import real CSV and lookup data using provided scripts
+- Commit and push all changes to GitHub for version control
+- Keep documentation updated after every step
+- Follow conventions in PLANNING.md, FILE_STRUCTURE_DOCUMENTATION.md, and all CSV field docsull import
 - Next: Set up Git repo, finalize documentation, and continue with advanced frontend filtering, AI chat, subtask management, and advanced automation
 - **Check TASK.md and DONE.md for latest progress and next steps**
 

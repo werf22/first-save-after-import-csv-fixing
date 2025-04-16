@@ -1,18 +1,44 @@
 import React, { useState, useEffect, useRef } from "react";
 import axios from "axios";
 
+// --- DYNAMIC FIELD CONFIGURATION ---
+// CSV fields from TASK_TABLE_FIELDS_EXAMPLE_STRUCTURE.csv
+const CSV_FIELDS = [
+  "Task ID","Name","Description","Notes","Task Comments","Portfolio","Project","Sections","Parent Task","Parent Task ID","Subtasks (for user)","Subtasks (for AI)","Subtasks (in System)","Subtasks ID (in System)","AI Brainstorm Ideas on How It Can Help Me:","Dependents","Dependents ID","Outgoing Dependents","Outgoing Dependents ID","Tags","Priority","Due Date","Start Date","Deadline Type","Recurrence / Frequency","Created At","Completed At","Last Modified At","Task Goal","Input Data & Context","Desired Output Format","AI Action / Process (Free Text)","AI Action / Process (Dropdown)","AI Workflow Status","Allow Autonomous Execution","Number of Variations (If Applicable)","Desired Style / Tone","Specific Constraints / Instructions","AI Behavior on Uncertainty","AI Creativity Level","AI Processing Priority","AI Agent Status Log","AI Output / Result Link","Action Required From User","Related Portfolios","Related Projects","Related Sections","Related Tasks","Related Tasks ID","Related Entities","Target Audience","Task Purpose (Why)","Type","Task Type","Estimated User Time","Cognitive Load (For User)","Energy Level Required (For User)","Required Tools / Software","Required Hardware","Required Skills","Estimated Cost / Budget","Expected Impact / Success Metric","Location","Execution Location","Required Device(s)","Internet Requirement","Focus Requirement","Optimal Time of Day","Assignee","Collaborators","Related Entity","Waiting For","Financial Return (Value & Speed)","AI Output Rating","Feedback for AI","Suggested Initial Steps / Subtasks","Relatated Areas for AI to Consider","Potential Dependencies / Related Tasks"
+];
+const FIELD_MAP = CSV_FIELDS.map(f => f
+  .replace(/\s*\([^)]*\)/g, "")
+  .replace(/[^a-zA-Z0-9]+/g, '_')
+  .replace(/^_+|_+$/g, '')
+  .replace(/_+/g, '_')
+  .toLowerCase()
+);
+
+// Build a unique field-label mapping preserving order
+const FIELD_LABEL_MAP: { field: string; label: string }[] = [];
+const seen = new Set<string>();
+for (let i = 0; i < FIELD_MAP.length; ++i) {
+  const field = FIELD_MAP[i];
+  if (!seen.has(field)) {
+    FIELD_LABEL_MAP.push({ field, label: CSV_FIELDS[i] });
+    seen.add(field);
+  }
+}
+
 interface Option {
   id: number;
   name: string;
 }
 
 interface TaskFilterProps {
-  filters: any;
-  onFiltersChange: (filters: any) => void;
+  filters: { [key: string]: any };
+  onFiltersChange: (filters: { [key: string]: any }) => void;
   debounceMs?: number;
 }
 
 export const TaskFilter: React.FC<TaskFilterProps> = ({ filters, onFiltersChange, debounceMs = 300 }) => {
+  const [options, setOptions] = useState({});
+  const debounceRef = useRef<NodeJS.Timeout | null>(null);
   const [priorityOptions, setPriorityOptions] = useState<Option[]>([]);
   const [portfolioOptions, setPortfolioOptions] = useState<Option[]>([]);
   const [projectOptions, setProjectOptions] = useState<Option[]>([]);
@@ -20,7 +46,6 @@ export const TaskFilter: React.FC<TaskFilterProps> = ({ filters, onFiltersChange
   const [statusOptions, setStatusOptions] = useState<Option[]>([]);
   const [tagOptions, setTagOptions] = useState<Option[]>([]);
   const [assigneeOptions, setAssigneeOptions] = useState<Option[]>([]);
-  const debounceRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     axios.get("/api/priorities").then(res => setPriorityOptions(res.data));
@@ -32,93 +57,112 @@ export const TaskFilter: React.FC<TaskFilterProps> = ({ filters, onFiltersChange
     axios.get("/api/assignees").then(res => setAssigneeOptions(res.data));
   }, []);
 
-  // Ensure select value is always valid after async options load
-  useEffect(() => {
-    if (
-      priorityOptions.length > 0 &&
-      filters.priority_id !== "" &&
-      !priorityOptions.some(opt => String(opt.id) === String(filters.priority_id))
-    ) {
-      onFiltersChange({ ...filters, priority_id: "" });
-    }
-  }, [priorityOptions]);
-
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
-    onFiltersChange({
-      ...filters,
-      [name]: value,
-    });
+    const newFilters = { ...filters, [name]: value };
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => onFiltersChange(newFilters), debounceMs);
+  };
+
+  const renderFilter = (field: string, i: number, visibleLabel: string) => {
+    const filterId = `filter-${field}`;
+    let labelText = `${visibleLabel} filter (${field})`.replace(/\s+/g, ' ').trim();
+    if (["priority", "portfolio", "project", "sections"].includes(field)) {
+      return (
+        <div key={field} style={{ display: 'flex', flexDirection: 'column', minWidth: 120 }}>
+          <label htmlFor={filterId}>{labelText}</label>
+          <select
+            id={filterId}
+            name={field}
+            aria-label={labelText}
+            value={filters[field] || ""}
+            onChange={handleChange}
+            style={{ width: '100%' }}
+          >
+            <option value="">All</option>
+            {(field === 'priority' ? priorityOptions : field === 'portfolio' ? portfolioOptions : field === 'project' ? projectOptions : sectionOptions).map(opt => (
+              <option key={opt.id} value={opt.id}>{opt.name}</option>
+            ))}
+          </select>
+        </div>
+      );
+    } else if (field === 'tags') {
+      return (
+        <div key={field} style={{ display: 'flex', flexDirection: 'column', minWidth: 120 }}>
+          <label htmlFor={filterId}>{labelText}</label>
+          <select
+            id={filterId}
+            name={field}
+            aria-label={labelText}
+            multiple
+            value={filters[field] ? filters[field].split(',') : []}
+            onChange={e => {
+              const selected = Array.from(e.target.selectedOptions).map(opt => opt.value).join(',');
+              handleChange({ target: { name: field, value: selected } } as any);
+            }}
+            style={{ width: '100%' }}
+          >
+            {tagOptions.map(opt => (
+              <option key={opt.id} value={opt.name}>{opt.name}</option>
+            ))}
+          </select>
+        </div>
+      );
+    } else if (field === 'assignee') {
+      return (
+        <div key={field} style={{ display: 'flex', flexDirection: 'column', minWidth: 120 }}>
+          <label htmlFor={filterId}>{labelText}</label>
+          <select
+            id={filterId}
+            name={field}
+            aria-label={labelText}
+            value={filters[field] || ""}
+            onChange={handleChange}
+            style={{ width: '100%' }}
+          >
+            <option value="">All</option>
+            {assigneeOptions.map(opt => (
+              <option key={opt.id} value={opt.name}>{opt.name}</option>
+            ))}
+          </select>
+        </div>
+      );
+    } else if (field.includes('date')) {
+      return (
+        <div key={field} style={{ display: 'flex', flexDirection: 'column', minWidth: 120 }}>
+          <label htmlFor={filterId}>{labelText}</label>
+          <input
+            id={filterId}
+            name={field}
+            type="date"
+            aria-label={labelText}
+            value={filters[field] || ''}
+            onChange={handleChange}
+            style={{ width: '100%' }}
+          />
+        </div>
+      );
+    } else {
+      return (
+        <div key={field} style={{ display: 'flex', flexDirection: 'column', minWidth: 120 }}>
+          <label htmlFor={filterId}>{labelText}</label>
+          <input
+            id={filterId}
+            name={field}
+            aria-label={labelText}
+            value={filters[field] || ''}
+            onChange={handleChange}
+            placeholder={`Filter ${visibleLabel}`}
+            style={{ width: '100%' }}
+          />
+        </div>
+      );
+    }
   };
 
   return (
-    <div style={{ margin: "1em 0", display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
-      <label htmlFor="portfolio-select">Portfolio:</label>
-      <select id="portfolio-select" name="portfolio_id" value={filters.portfolio_id || ""} onChange={handleChange} aria-label="Portfolio">
-        <option value="">All</option>
-        {portfolioOptions.map(opt => (
-          <option key={opt.id} value={opt.id}>{opt.name}</option>
-        ))}
-      </select>
-      <label htmlFor="project-select">Project:</label>
-      <select id="project-select" name="project_id" value={filters.project_id || ""} onChange={handleChange} aria-label="Project">
-        <option value="">All</option>
-        {projectOptions.map(opt => (
-          <option key={opt.id} value={opt.id}>{opt.name}</option>
-        ))}
-      </select>
-      <label htmlFor="section-select">Section:</label>
-      <select id="section-select" name="section_id" value={filters.section_id || ""} onChange={handleChange} aria-label="Section">
-        <option value="">All</option>
-        {sectionOptions.map(opt => (
-          <option key={opt.id} value={opt.id}>{opt.name}</option>
-        ))}
-      </select>
-      <label htmlFor="priority-select">Priority:</label>
-      <select id="priority-select" name="priority_id" value={filters.priority_id || ""} onChange={handleChange} aria-label="Priority">
-        <option value="">All</option>
-        {priorityOptions.map(opt => (
-          <option key={opt.id} value={opt.id}>{opt.name}</option>
-        ))}
-      </select>
-      <label htmlFor="status-select">Status:</label>
-      <select id="status-select" name="status" value={filters.status || ""} onChange={handleChange} aria-label="Status">
-        <option value="">All</option>
-        {statusOptions.map(opt => (
-          <option key={opt.id} value={opt.id}>{opt.name}</option>
-        ))}
-      </select>
-      <label htmlFor="tag-select">Tag:</label>
-      <select id="tag-select" name="tag" value={filters.tag || ""} onChange={handleChange} aria-label="Tag">
-        <option value="">All</option>
-        {tagOptions.map(opt => (
-          <option key={opt.id} value={opt.id}>{opt.name}</option>
-        ))}
-      </select>
-      <label htmlFor="assignee-select">Assignee:</label>
-      <select id="assignee-select" name="assignee" value={filters.assignee || ""} onChange={handleChange} aria-label="Assignee">
-        <option value="">All</option>
-        {assigneeOptions.map(opt => (
-          <option key={opt.id} value={opt.id}>{opt.name}</option>
-        ))}
-      </select>
-      <label htmlFor="due-date-before">Due Before:</label>
-      <input id="due-date-before" name="due_date_before" type="date" value={filters.due_date_before || ""} onChange={handleChange} aria-label="Due Before" />
-      <label htmlFor="due-date-after">Due After:</label>
-      <input id="due-date-after" name="due_date_after" type="date" value={filters.due_date_after || ""} onChange={handleChange} aria-label="Due After" />
-      <label htmlFor="created-at-after">Created After:</label>
-      <input id="created-at-after" name="created_at_after" type="date" value={filters.created_at_after || ""} onChange={handleChange} aria-label="Created After" />
-      <label htmlFor="created-at-before">Created Before:</label>
-      <input id="created-at-before" name="created_at_before" type="date" value={filters.created_at_before || ""} onChange={handleChange} aria-label="Created Before" />
-      <label htmlFor="completed-at-after">Completed After:</label>
-      <input id="completed-at-after" name="completed_at_after" type="date" value={filters.completed_at_after || ""} onChange={handleChange} aria-label="Completed After" />
-      <label htmlFor="completed-at-before">Completed Before:</label>
-      <input id="completed-at-before" name="completed_at_before" type="date" value={filters.completed_at_before || ""} onChange={handleChange} aria-label="Completed Before" />
-      <label htmlFor="last-modified-at-after">Last Modified After:</label>
-      <input id="last-modified-at-after" name="last_modified_at_after" type="date" value={filters.last_modified_at_after || ""} onChange={handleChange} aria-label="Last Modified After" />
-      <label htmlFor="last-modified-at-before">Last Modified Before:</label>
-      <input id="last-modified-at-before" name="last_modified_at_before" type="date" value={filters.last_modified_at_before || ""} onChange={handleChange} aria-label="Last Modified Before" />
-      <input name="search" type="text" placeholder="Search..." value={filters.search || ""} onChange={handleChange} aria-label="Search" />
+    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, maxHeight: 240, overflowY: 'auto', border: '1px solid #eee', padding: 8, marginBottom: 12 }}>
+      {FIELD_LABEL_MAP.map(({field, label}, i) => renderFilter(field, i, label))}
     </div>
   );
 };

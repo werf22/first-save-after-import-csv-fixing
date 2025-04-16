@@ -28,6 +28,7 @@ import csv
 import json
 import argparse
 from typing import Dict, Any, List
+import pandas as pd
 
 try:
     import requests
@@ -143,29 +144,103 @@ def map_lookup_value(field: str, value: str, lookups=None) -> int:
     return tables.get(field, {}).get(value, None)
 
 
-def parse_csv(csv_path: str, lookups: dict) -> list:
+# --- Utility: Clean integer fields ---
+def clean_int(val):
+    try:
+        if val is None:
+            return None
+        if isinstance(val, float):
+            import math
+            if math.isnan(val):
+                return None
+            return int(val)
+        if isinstance(val, str):
+            val = val.strip()
+            if val == '' or val.lower() == 'nan':
+                return None
+            return int(float(val))
+        return int(val)
+    except Exception:
+        return None
+
+# --- Utility: Clean all fields in a dict (convert nan to None, enforce int for *_id fields) ---
+def clean_task_dict(task: dict) -> dict:
+    import math
+    import numpy as np
+    for k, v in list(task.items()):
+        if v is None:
+            continue
+        # Clean integer fields and *_id fields
+        if k.endswith('_id') or k in [
+            'id', 'portfolio', 'portfolio_id', 'project', 'project_id',
+            'section', 'section_id', 'priority', 'priority_id',
+            'parent_task_id', 'subtasks_id_in_system', 'dependents_id',
+            'outgoing_dependents_id', 'number_of_variations',
+        ]:
+            try:
+                if isinstance(v, float) and math.isnan(v):
+                    task[k] = None
+                elif isinstance(v, str) and (v.strip() == '' or v.strip().lower() == 'nan'):
+                    task[k] = None
+                elif 'numpy' in str(type(v)) and np.isnan(v):
+                    task[k] = None
+                else:
+                    task[k] = int(float(v))
+            except Exception:
+                task[k] = None
+        else:
+            if isinstance(v, float) and math.isnan(v):
+                task[k] = None
+            elif isinstance(v, str) and (v.strip() == '' or v.strip().lower() == 'nan'):
+                task[k] = None
+            elif 'numpy' in str(type(v)) and np.isnan(v):
+                task[k] = None
+    return task
+
+# --- Utility: Deep clean all fields in a dict/list (convert nan/numpy.nan/empty to None everywhere) ---
+def deep_clean(obj):
+    import math
+    import numpy as np
+    if isinstance(obj, dict):
+        return {k: deep_clean(v) for k, v in obj.items()}
+    elif isinstance(obj, list):
+        return [deep_clean(v) for v in obj]
+    elif obj is None:
+        return None
+    elif isinstance(obj, float) and math.isnan(obj):
+        return None
+    elif 'numpy' in str(type(obj)) and hasattr(obj, 'dtype') and np.isnan(obj):
+        return None
+    elif isinstance(obj, str) and (obj.strip().lower() == 'nan' or obj.strip() == ''):
+        return None
+    else:
+        return obj
+
+# --- Main CSV parsing logic ---
+def parse_csv(csv_path: str, lookups: Dict[str, Dict[str, int]]) -> List[Dict[str, Any]]:
+    df = pd.read_csv(csv_path)
     tasks = []
-    with open(csv_path, encoding='utf-8') as f:
-        sample = f.read(2048)
-        f.seek(0)
-        # Try to autodetect delimiter, fallback to comma if detection fails
-        try:
-            dialect = csv.Sniffer().sniff(sample, delimiters=';,')
-        except csv.Error:
-            print('[WARN] Could not determine delimiter, defaulting to comma (,).')
-            class SimpleDialect(csv.Dialect):
-                delimiter = ','
-                quotechar = '"'
-                doublequote = True
-                skipinitialspace = True
-                lineterminator = '\n'
-                quoting = csv.QUOTE_MINIMAL
-            dialect = SimpleDialect
-        reader = csv.DictReader(f, dialect=dialect)
-        for row in reader:
-            # Preserve ALL columns and their data, do not filter or remap
-            task = {k.strip(): v.strip() if v is not None else '' for k, v in row.items()}
-            tasks.append(task)
+    for _, row in df.iterrows():
+        task = {}
+        for csv_col, db_field in CSV_TO_DB_MAP.items():
+            val = row.get(csv_col, None)
+            # Clean integer fields
+            if db_field in [
+                'id', 'portfolio', 'portfolio_id', 'project', 'project_id',
+                'section', 'section_id', 'priority', 'priority_id',
+                'parent_task_id', 'subtasks_id_in_system', 'dependents_id',
+                'outgoing_dependents_id', 'number_of_variations',
+            ]:
+                task[db_field] = clean_int(val)
+            else:
+                task[db_field] = val
+        # Map lookups if needed
+        for field in LOOKUP_FIELDS:
+            if field in task and isinstance(task[field], str):
+                task[field + '_id'] = lookups.get(field, {}).get(task[field], None)
+        task = clean_task_dict(task)
+        task = deep_clean(task)
+        tasks.append(task)
     return tasks
 
 

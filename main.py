@@ -9,7 +9,7 @@ import io
 from pydantic import BaseModel
 import os
 import openai
-from datetime import date
+from datetime import date, datetime
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 import secrets
 from dotenv import load_dotenv
@@ -20,7 +20,7 @@ from fastapi import Path
 
 load_dotenv()
 
-***REMOVED*** = "sqlite:///./tasks.db"
+***REMOVED*** = os.getenv("***REMOVED***", "sqlite:///./tasks.db")
 engine = create_engine(***REMOVED***, echo=False)
 
 app = FastAPI(title="AI To Do List API")
@@ -43,6 +43,32 @@ def get_current_user(credentials: HTTPBasicCredentials = Depends(security)):
     if not (correct_username and correct_password):
         raise HTTPException(status_code=401, detail="Unauthorized", headers={"WWW-Authenticate": "Basic"})
     return credentials.username
+
+# --- Utility: Clean all integer fields in a task dict (API-side defensive) ---
+def clean_int_fields(task_dict):
+    import math
+    import numpy as np
+    for k, v in list(task_dict.items()):
+        if v is None:
+            continue
+        if k.endswith('_id') or k in [
+            'id', 'portfolio', 'portfolio_id', 'project', 'project_id',
+            'section', 'section_id', 'priority', 'priority_id',
+            'parent_task_id', 'subtasks_id_in_system', 'dependents_id',
+            'outgoing_dependents_id', 'number_of_variations',
+        ]:
+            try:
+                if isinstance(v, float) and math.isnan(v):
+                    task_dict[k] = None
+                elif isinstance(v, str) and (v.strip() == '' or v.strip().lower() == 'nan'):
+                    task_dict[k] = None
+                elif 'numpy' in str(type(v)) and np.isnan(v):
+                    task_dict[k] = None
+                else:
+                    task_dict[k] = int(float(v))
+            except Exception:
+                task_dict[k] = None
+    return task_dict
 
 # --- CRUD for Lookup Tables ---
 @app.get("/portfolios", response_model=List[Portfolio])
@@ -193,6 +219,42 @@ def delete_task(task_id: int, session: Session = Depends(get_session), user: str
     session.commit()
     return {"ok": True}
 
+# --- Task Chat Endpoints ---
+@app.post("/tasks/{task_id}/chat")
+def task_chat(task_id: int, payload: dict, session: Session = Depends(get_session), user: str = Depends(get_current_user)):
+    """
+    Task-specific AI chat endpoint. Stores user message, gets AI response, stores AI reply, returns full chat history.
+    """
+    # Validate task exists
+    task = session.exec(select(Task).where(Task.id == task_id)).first()
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+    user_msg = payload.get("message", "")
+    if not user_msg:
+        raise HTTPException(status_code=400, detail="Message required")
+    # Store user message
+    user_chat = TaskChatMessage(task_id=task_id, sender="user", message=user_msg, timestamp=datetime.utcnow())
+    session.add(user_chat)
+    session.commit()
+    session.refresh(user_chat)
+    # Get AI response (dummy for now, can wire to OpenAI)
+    ai_response = f"AI says: {user_msg[::-1]}"
+    ai_chat = TaskChatMessage(task_id=task_id, sender="ai", message=ai_response, timestamp=datetime.utcnow())
+    session.add(ai_chat)
+    session.commit()
+    session.refresh(ai_chat)
+    # Return full chat history for this task
+    history = session.exec(select(TaskChatMessage).where(TaskChatMessage.task_id == task_id).order_by(TaskChatMessage.timestamp)).all()
+    return [{"sender": m.sender, "message": m.message, "timestamp": m.timestamp.isoformat()} for m in history]
+
+@app.get("/tasks/{task_id}/chat")
+def get_task_chat(task_id: int, session: Session = Depends(get_session), user: str = Depends(get_current_user)):
+    """
+    Get full chat history for a task.
+    """
+    history = session.exec(select(TaskChatMessage).where(TaskChatMessage.task_id == task_id).order_by(TaskChatMessage.timestamp)).all()
+    return [{"sender": m.sender, "message": m.message, "timestamp": m.timestamp.isoformat()} for m in history]
+
 # --- CSV Import/Export ---
 @app.get("/tasks/export/csv")
 def export_tasks_csv(session: Session = Depends(get_session), user: str = Depends(get_current_user)):
@@ -204,44 +266,23 @@ def export_tasks_csv(session: Session = Depends(get_session), user: str = Depend
 
 @app.post("/tasks/import/csv")
 def import_tasks_csv(file: UploadFile = File(...), session: Session = Depends(get_session), user: str = Depends(get_current_user)):
-    content = file.file.read().decode('utf-8')
-    df = pd.read_csv(io.StringIO(content), sep=';')
-    df = df.where(pd.notnull(df), None)  # Replace NaN with None
+    import pandas as pd
+    import io
+    df = pd.read_csv(io.BytesIO(file.file.read()))
     imported = []
+    skipped = 0
     for _, row in df.iterrows():
         row_dict = row.to_dict()
-        row_dict.pop("id", None)  # Remove id to let DB auto-increment
-        # Convert date fields
-        for date_field in ["due_date", "start_date", "created_at", "completed_at", "last_modified_at"]:
-            val = row_dict.get(date_field)
-            if val is not None and isinstance(val, str) and val.strip() != "":
-                try:
-                    if "T" in val or ":" in val:
-                        # datetime
-                        row_dict[date_field] = pd.to_datetime(val)
-                    else:
-                        row_dict[date_field] = pd.to_datetime(val).date()
-                except Exception:
-                    row_dict[date_field] = None
-            else:
-                row_dict[date_field] = None
-        # Ensure boolean fields are handled correctly
-        bool_fields = ["allow_autonomous_execution"]
-        for bool_field in bool_fields:
-            val = row_dict.get(bool_field)
-            if val is None or (isinstance(val, float) and pd.isna(val)):
-                row_dict[bool_field] = False
-            elif isinstance(val, str):
-                row_dict[bool_field] = val.strip().lower() in ["1", "true", "yes", "y"]
-            elif isinstance(val, (int, float)):
-                row_dict[bool_field] = bool(val)
-            else:
-                row_dict[bool_field] = False
+        row_dict = clean_int_fields(row_dict)
+        # Skip if required field 'name' is missing or empty
+        if not row_dict.get('name') or str(row_dict['name']).strip() == '':
+            skipped += 1
+            continue
         task = Task(**row_dict)
         session.add(task)
         imported.append(task)
     session.commit()
-    return {"imported": len(imported)}
+    return {"imported": len(imported), "skipped": skipped}
 
 class ChatRequest(BaseModel):
     message: str
