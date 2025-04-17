@@ -1,8 +1,8 @@
 from sqlmodel import SQLModel, create_engine
 from models import *
 
-***REMOVED*** = "sqlite:///./tasks.db"
-engine = create_engine(***REMOVED***, echo=True)
+DATABASE_URL = "sqlite:///./tasks.db"
+engine = create_engine(DATABASE_URL, echo=True)
 
 def init_db():
     SQLModel.metadata.create_all(engine)

@@ -20,8 +20,8 @@ from fastapi import Path
 
 load_dotenv()
 
-***REMOVED*** = os.getenv("***REMOVED***", "sqlite:///./tasks.db")
-engine = create_engine(***REMOVED***, echo=False)
+DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./tasks.db")
+engine = create_engine(DATABASE_URL, echo=False)
 
 app = FastAPI(title="AI To Do List API")
 
@@ -30,16 +30,16 @@ def get_session():
         yield session
 
 # Load OpenAI API key from environment variable
-openai.api_key = os.getenv("***REMOVED***")
+openai.api_key = os.getenv("OPENAI_API_KEY")
 
 security = HTTPBasic()
 
-***REMOVED*** = os.getenv("***REMOVED***", "jakub")
-***REMOVED*** = os.getenv("***REMOVED***", "cerulik123")
+AUTH_USERNAME = os.getenv("AUTH_USERNAME", "jakub")
+AUTH_PASSWORD = os.getenv("AUTH_PASSWORD", "cerulik123")
 
 def get_current_user(credentials: HTTPBasicCredentials = Depends(security)):
-    correct_username = secrets.compare_digest(credentials.username, ***REMOVED***)
-    correct_password = secrets.compare_digest(credentials.password, ***REMOVED***)
+    correct_username = secrets.compare_digest(credentials.username, AUTH_USERNAME)
+    correct_password = secrets.compare_digest(credentials.password, AUTH_PASSWORD)
     if not (correct_username and correct_password):
         raise HTTPException(status_code=401, detail="Unauthorized", headers={"WWW-Authenticate": "Basic"})
     return credentials.username

@@ -29,8 +29,8 @@ def setup_module(module):
 client = TestClient(app)
 
 def auth_headers():
-    user = os.getenv("***REMOVED***", "jakub")
-    pw = os.getenv("***REMOVED***", "cerulik123")
+    user = os.getenv("AUTH_USERNAME", "jakub")
+    pw = os.getenv("AUTH_PASSWORD", "cerulik123")
     token = base64.b64encode(f"{user}:{pw}".encode()).decode()
     return {"Authorization": f"Basic {token}"}
 

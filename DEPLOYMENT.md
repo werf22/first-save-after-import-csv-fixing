@@ -32,9 +32,9 @@ This document describes the deployment setup, what is already configured, and st
   - Start command: `uvicorn main:app --host 0.0.0.0 --port 10000`
 - Provision a PostgreSQL database (Render can do this automatically)
 - Set environment variables (see `.env.example`):
-  - `***REMOVED***` (provided by Render)
-  - `***REMOVED***` (optional, for AI features)
-  - `***REMOVED***`, `***REMOVED***` (for API auth)
+  - `DATABASE_URL` (provided by Render)
+  - `OPENAI_API_KEY` (optional, for AI features)
+  - `AUTH_USERNAME`, `AUTH_PASSWORD` (for API auth)
 - Deploy and wait for build to complete
 
 ### 2. Frontend API URL Update
